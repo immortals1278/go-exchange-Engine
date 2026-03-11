@@ -1,0 +1,18 @@
+package main
+
+import (
+	"go-exchange/api"
+	"go-exchange/engine"
+	"net/http"
+)
+
+func main() {
+
+	engine := engine.NewMatchingEngine()
+
+	handler := api.NewHandler(engine)
+
+	http.HandleFunc("/order", handler.PlaceOrder)
+
+	http.ListenAndServe(":8080", nil)
+}
