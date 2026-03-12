@@ -17,32 +17,51 @@ func NewMatchingEngine() *MatchingEngine {
 
 func (e *MatchingEngine) PlaceOrder(order *model.Order) {
 
-	if order.Side == model.Buy {
-		e.Book.BuyOrders = append(e.Book.BuyOrders, order)
-	} else {
-		e.Book.SellOrders = append(e.Book.SellOrders, order)
-	}
+	e.Book.AddOrder(order)
 
 	e.match()
 }
 
 func (e *MatchingEngine) match() {
 
-	if len(e.Book.BuyOrders) == 0 || len(e.Book.SellOrders) == 0 {
-		return
-	}
+	for {
 
-	buy := e.Book.BuyOrders[0]
-	sell := e.Book.SellOrders[0]
+		if len(e.Book.BidPrices) == 0 || len(e.Book.AskPrices) == 0 {
+			return
+		}
 
-	if buy.Price >= sell.Price {
+		bestBid := e.Book.BidPrices[0]
+		bestAsk := e.Book.AskPrices[0]
 
-		if buy.Quantity >= sell.Quantity {
-			buy.Quantity -= sell.Quantity
-			e.Book.SellOrders = e.Book.SellOrders[1:]
+		if bestBid < bestAsk {
+			return
+		}
+
+		bidLevel := e.Book.Bids[bestBid]
+		askLevel := e.Book.Asks[bestAsk]
+
+		buyOrder := bidLevel.Orders[0]
+		sellOrder := askLevel.Orders[0]
+
+		if buyOrder.Quantity >= sellOrder.Quantity {
+
+			buyOrder.Quantity -= sellOrder.Quantity
+			askLevel.Orders = askLevel.Orders[1:]
+
+			if len(askLevel.Orders) == 0 {
+				delete(e.Book.Asks, bestAsk)
+				e.Book.AskPrices = e.Book.AskPrices[1:]
+			}
+
 		} else {
-			sell.Quantity -= buy.Quantity
-			e.Book.BuyOrders = e.Book.BuyOrders[1:]
+
+			sellOrder.Quantity -= buyOrder.Quantity
+			bidLevel.Orders = bidLevel.Orders[1:]
+
+			if len(bidLevel.Orders) == 0 {
+				delete(e.Book.Bids, bestBid)
+				e.Book.BidPrices = e.Book.BidPrices[1:]
+			}
 		}
 	}
 }
