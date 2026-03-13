@@ -7,6 +7,9 @@ import (
 )
 
 func main() {
+	
+	storage.InitMySQL()
+	storage.InitRedis()
 
 	engine := engine.NewMatchingEngine()
 

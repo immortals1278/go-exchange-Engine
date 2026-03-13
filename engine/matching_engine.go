@@ -20,6 +20,8 @@ func (e *MatchingEngine) PlaceOrder(order *model.Order) {
 	e.Book.AddOrder(order)
 
 	e.match()
+
+	storage.SaveOrder(order.ID, order.UserID, string(order.Side), order.Price, order.Quantity)
 }
 
 func (e *MatchingEngine) match() {
@@ -47,6 +49,7 @@ func (e *MatchingEngine) match() {
 
 			buyOrder.Quantity -= sellOrder.Quantity
 			askLevel.Orders = askLevel.Orders[1:]
+			storage.SaveTrade(buyOrder.ID, sellOrder.ID, sellOrder.Price, sellOrder.Quantity)
 
 			if len(askLevel.Orders) == 0 {
 				delete(e.Book.Asks, bestAsk)
@@ -57,6 +60,7 @@ func (e *MatchingEngine) match() {
 
 			sellOrder.Quantity -= buyOrder.Quantity
 			bidLevel.Orders = bidLevel.Orders[1:]
+			storage.SaveTrade(buyOrder.ID, sellOrder.ID, sellOrder.Price, sellOrder.Quantity)
 
 			if len(bidLevel.Orders) == 0 {
 				delete(e.Book.Bids, bestBid)

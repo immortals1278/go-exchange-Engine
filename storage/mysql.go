@@ -11,7 +11,7 @@ var DB *sql.DB
 
 func InitMySQL() {
 
-	dsn := "root:password@tcp(127.0.0.1:3306)/exchange"
+	dsn := "root:123456@tcp(127.0.0.1:3306)/exchangeengine"
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -33,17 +33,6 @@ func SaveOrder(id, userID, side string, price, qty float64) {
 	}
 }
 
-func SaveOrder(id, userID, side string, price, qty float64) {
-
-	_, err := DB.Exec(
-		"INSERT INTO orders(id,user_id,side,price,quantity,status) VALUES(?,?,?,?,?,?)",
-		id, userID, side, price, qty, "open",
-	)
-
-	if err != nil {
-		log.Println(err)
-	}
-}
 
 func SaveTrade(buyID, sellID string, price, qty float64) {
 
