@@ -16,6 +16,8 @@ func NewMatchingEngine() *MatchingEngine {
 }
 
 func (e *MatchingEngine) PlaceOrder(order *model.Order) {
+	order.ID = GenerateOrderID()
+	order.Status = model.Open
 
 	e.Book.AddOrder(order)
 
