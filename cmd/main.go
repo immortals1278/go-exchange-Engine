@@ -17,5 +17,7 @@ func main() {
 
 	http.HandleFunc("/order", handler.PlaceOrder)
 
+	http.HandleFunc("/cancel", handler.CancelOrder)
+
 	http.ListenAndServe(":8080", nil)
 }

@@ -45,3 +45,15 @@ func SaveTrade(buyID, sellID string, price, qty float64) {
 		log.Println(err)
 	}
 }
+
+func UpdateOrderStatus(id, status string) {
+
+	_, err := DB.Exec(
+		"UPDATE orders SET status=? WHERE id=?",
+		status, id,
+	)
+
+	if err != nil {
+		log.Println(err)
+	}
+}

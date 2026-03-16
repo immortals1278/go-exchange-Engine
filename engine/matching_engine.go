@@ -71,3 +71,14 @@ func (e *MatchingEngine) match() {
 		}
 	}
 }
+
+func (e *MatchingEngine) CancelOrder(orderID string) bool {
+
+	ok := e.Book.RemoveOrder(orderID)
+
+	if ok {
+		storage.UpdateOrderStatus(orderID, "canceled")
+	}
+
+	return ok
+}

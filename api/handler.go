@@ -25,3 +25,17 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 
 	w.Write([]byte("ok"))
 }
+
+func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
+
+	id := r.URL.Query().Get("id")
+
+	ok := h.Engine.CancelOrder(id)
+
+	if ok {
+		w.Write([]byte("canceled"))
+	} else {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("order not found"))
+	}
+}
