@@ -4,6 +4,7 @@ import (
 	"go-exchange/model"
 	"go-exchange/orderbook"
 	"go-exchange/storage"
+	"go-exchange/account"
 )
 
 type MatchingEngine struct {
@@ -17,6 +18,21 @@ func NewMatchingEngine() *MatchingEngine {
 }
 
 func (e *MatchingEngine) PlaceOrder(order *model.Order) {
+	//冻结逻辑
+	var ok bool
+	if order.Side == model.Buy {
+		// 买 BTC，冻结 USDT
+		cost := order.Price * order.Quantity
+		ok = account.Freeze(order.UserID, "USDT", cost)
+	} else {
+		// 卖 BTC，冻结 BTC
+		ok = account.Freeze(order.UserID, "BTC", order.Quantity)
+	}
+	if !ok {
+		return // 余额不足
+	}
+
+
 	order.ID = GenerateOrderID()
 	order.Status = model.Open
 
@@ -74,6 +90,23 @@ func (e *MatchingEngine) match() {
 }
 
 func (e *MatchingEngine) CancelOrder(orderID string) bool {
+	order := e.Book.GetOrder(orderID)
+	
+	if order == nil {
+		return false
+	}
+	//操作数据库
+	if order.Side == model.Buy {
+
+		account.Unfreeze(order.UserID, "USDT",
+			order.Price*order.Quantity)
+
+	} else {
+
+		account.Unfreeze(order.UserID, "BTC",
+			order.Quantity)
+	}
+
 
 	ok := e.Book.RemoveOrder(orderID)
 

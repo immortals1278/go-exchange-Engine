@@ -60,6 +60,31 @@ func (ob *OrderBook) AddOrder(order *model.Order) {
 
 }
 
+func (ob *OrderBook) GetOrder(orderID string) *model.Order {
+
+	for _, level := range ob.Bids {
+
+		for _, o := range level.Orders {
+
+			if o.ID == orderID {
+				return o
+			}
+		}
+	}
+
+	for _, level := range ob.Asks {
+
+		for _, o := range level.Orders {
+
+			if o.ID == orderID {
+				return o
+			}
+		}
+	}
+
+	return nil
+}
+
 func (ob *OrderBook) RemoveOrder(orderID string) bool {
 
 	for price, level := range ob.Bids {
