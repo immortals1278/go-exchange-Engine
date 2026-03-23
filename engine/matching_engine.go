@@ -69,29 +69,32 @@ func (e *MatchingEngine) match() {
 		buyOrder := bidLevel.Orders[0]
 		sellOrder := askLevel.Orders[0]
 
-		tradeQty := sellOrder.Quantity
+		tradeQtyDec := decimal.NewFromFloat(sellOrder.Quantity)
 		if buyOrder.Quantity < sellOrder.Quantity {
-			tradeQty = buyOrder.Quantity
+			tradeQtyDec = decimal.NewFromFloat(buyOrder.Quantity)
 		}
 
-		tradePrice := sellOrder.Price
-		tradeAmount := tradePrice * tradeQty
+		tradePriceDec := decimal.NewFromFloat(sellOrder.Price)
+		tradeAmount := tradePriceDec.Mul(tradeQtyDec)
 		
 		// 计算手续费
 		feeRate := decimal.NewFromFloat(FeeRate)
-		tradeAmountDec := decimal.NewFromFloat(tradeAmount)
-		fee := tradeAmountDec.Mul(feeRate)
+		fee := tradeAmount.Mul(feeRate)
+		buyerFee := tradeQtyDec.Mul(feeRate)
 		
-		// 买方：扣除冻结的USDT，获得BTC
-		account.DeductFrozen(buyOrder.UserID, "USDT", tradeAmount)
-		account.AddBalance(buyOrder.UserID, "BTC", tradeQty)
+		// 买方：扣除冻结的USDT，获得BTC（减fee）
+		account.DeductFrozen(buyOrder.UserID, "USDT", tradeAmount.InexactFloat64())
+		account.AddBalance(buyOrder.UserID, "BTC", tradeQtyDec.Sub(buyerFee).InexactFloat64())
+		account.ChangeBalance(buyOrder.UserID, "BTC", buyerFee, "fee", buyOrder.ID, "")
 		
-		// 卖方：扣除冻结的BTC，获得USDT（扣除手续费）
-		account.DeductFrozen(sellOrder.UserID, "BTC", tradeQty)
-		account.AddBalance(sellOrder.UserID, "USDT", tradeAmount-fee.InexactFloat64())
+		// 卖方：扣除冻结的BTC，获得USDT（减fee）
+		account.DeductFrozen(sellOrder.UserID, "BTC", tradeQtyDec.InexactFloat64())
+		account.AddBalance(sellOrder.UserID, "USDT", tradeAmount.Sub(fee).InexactFloat64())
+		account.ChangeBalance(sellOrder.UserID, "USDT", fee, "fee", sellOrder.ID, "")
 		
-		// 系统收取手续费
-		account.ChangeBalance(SystemUserID, "USDT", fee, "fee_credit", buyOrder.ID+"_"+sellOrder.ID, "")
+		// 系统收取手续费（两种资产）
+		account.ChangeBalance(SystemUserID, "BTC", buyerFee, "fee_credit", "", "")
+		account.ChangeBalance(SystemUserID, "USDT", fee, "fee_credit", "", "")
 
 		if buyOrder.Quantity >= sellOrder.Quantity {
 
