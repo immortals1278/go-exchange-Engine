@@ -83,6 +83,18 @@ func ChangeBalance(userID, asset string, delta decimal.Decimal, entryType string
 		newAvailable = availDec.Add(delta)
 		newFrozen = frozenDec
 		change = delta
+	case "fee":
+		if frozenDec.LessThan(delta) {
+			tx.Rollback()
+			return false
+		}
+		newAvailable = availDec
+		newFrozen = frozenDec.Sub(delta)
+		change = delta.Neg()
+	case "fee_credit":
+		newAvailable = availDec.Add(delta)
+		newFrozen = frozenDec
+		change = delta
 	default:
 		tx.Rollback()
 		return false

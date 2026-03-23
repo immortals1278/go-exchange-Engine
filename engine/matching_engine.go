@@ -5,7 +5,12 @@ import (
 	"go-exchange/orderbook"
 	"go-exchange/storage"
 	"go-exchange/account"
+
+	"github.com/shopspring/decimal"
 )
+
+const SystemUserID = "system"
+const FeeRate = 0.001 // 0.1% 手续费率
 
 type MatchingEngine struct {
 	Book *orderbook.OrderBook
@@ -64,6 +69,30 @@ func (e *MatchingEngine) match() {
 		buyOrder := bidLevel.Orders[0]
 		sellOrder := askLevel.Orders[0]
 
+		tradeQty := sellOrder.Quantity
+		if buyOrder.Quantity < sellOrder.Quantity {
+			tradeQty = buyOrder.Quantity
+		}
+
+		tradePrice := sellOrder.Price
+		tradeAmount := tradePrice * tradeQty
+		
+		// 计算手续费
+		feeRate := decimal.NewFromFloat(FeeRate)
+		tradeAmountDec := decimal.NewFromFloat(tradeAmount)
+		fee := tradeAmountDec.Mul(feeRate)
+		
+		// 买方：扣除冻结的USDT，获得BTC
+		account.DeductFrozen(buyOrder.UserID, "USDT", tradeAmount)
+		account.AddBalance(buyOrder.UserID, "BTC", tradeQty)
+		
+		// 卖方：扣除冻结的BTC，获得USDT（扣除手续费）
+		account.DeductFrozen(sellOrder.UserID, "BTC", tradeQty)
+		account.AddBalance(sellOrder.UserID, "USDT", tradeAmount-fee.InexactFloat64())
+		
+		// 系统收取手续费
+		account.ChangeBalance(SystemUserID, "USDT", fee, "fee_credit", buyOrder.ID+"_"+sellOrder.ID, "")
+
 		if buyOrder.Quantity >= sellOrder.Quantity {
 
 			buyOrder.Quantity -= sellOrder.Quantity
@@ -79,7 +108,7 @@ func (e *MatchingEngine) match() {
 
 			sellOrder.Quantity -= buyOrder.Quantity
 			bidLevel.Orders = bidLevel.Orders[1:]
-			storage.SaveTrade(buyOrder.ID, sellOrder.ID, sellOrder.Price, sellOrder.Quantity)
+			storage.SaveTrade(buyOrder.ID, sellOrder.ID, sellOrder.Price, buyOrder.Quantity)
 
 			if len(bidLevel.Orders) == 0 {
 				delete(e.Book.Bids, bestBid)
