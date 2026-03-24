@@ -13,13 +13,22 @@ const SystemUserID = "system"
 const FeeRate = 0.001 // 0.1% 手续费率
 
 type MatchingEngine struct {
-	Book *orderbook.OrderBook
+	Books map[string]*orderbook.OderBook
 }
 
 func NewMatchingEngine() *MatchingEngine {
 	return &MatchingEngine{
-		Book: orderbook.NewOrderBook(),
+		Books: make(map[string]*orderbook.OrderBook),
 	}
+}
+
+func (e *MatchingEngine) getBook(symbol string) *orderbook.OrderBook{
+	book,ok := e.books[symbol]
+	if !ok {
+		e.books[symbol] = orderbook.NewOrderBook()
+		book = e.books[symbol]
+	}
+	return book
 }
 
 func (e *MatchingEngine) PlaceOrder(order *model.Order) {
@@ -40,31 +49,31 @@ func (e *MatchingEngine) PlaceOrder(order *model.Order) {
 
 	order.ID = GenerateOrderID()
 	order.Status = model.Open
+	Book := e.getBook(order.Symbol)
+	Book.AddOrder(order)
 
-	e.Book.AddOrder(order)
-
-	e.match()
+	e.match(synbol)
 
 	storage.SaveOrder(order.ID, order.UserID, string(order.Side), order.Price, order.Quantity)
 }
 
-func (e *MatchingEngine) match() {
-
+func (e *MatchingEngine) match(symbol string) {
+	Book := e.getBook(symbol)
 	for {
 
-		if len(e.Book.BidPrices) == 0 || len(e.Book.AskPrices) == 0 {
+		if len(Book.BidPrices) == 0 || len(Book.AskPrices) == 0 {
 			return
 		}
 
-		bestBid := e.Book.BidPrices[0]
-		bestAsk := e.Book.AskPrices[0]
+		bestBid := Book.BidPrices[0]
+		bestAsk := Book.AskPrices[0]
 
 		if bestBid < bestAsk {
 			return
 		}
 
-		bidLevel := e.Book.Bids[bestBid]
-		askLevel := e.Book.Asks[bestAsk]
+		bidLevel := Book.Bids[bestBid]
+		askLevel := Book.Asks[bestAsk]
 
 		buyOrder := bidLevel.Orders[0]
 		sellOrder := askLevel.Orders[0]
@@ -103,8 +112,8 @@ func (e *MatchingEngine) match() {
 			storage.SaveTrade(buyOrder.ID, sellOrder.ID, sellOrder.Price, sellOrder.Quantity)
 
 			if len(askLevel.Orders) == 0 {
-				delete(e.Book.Asks, bestAsk)
-				e.Book.AskPrices = e.Book.AskPrices[1:]
+				delete(Book.Asks, bestAsk)
+				Book.AskPrices = Book.AskPrices[1:]
 			}
 
 		} else {
@@ -114,8 +123,8 @@ func (e *MatchingEngine) match() {
 			storage.SaveTrade(buyOrder.ID, sellOrder.ID, sellOrder.Price, buyOrder.Quantity)
 
 			if len(bidLevel.Orders) == 0 {
-				delete(e.Book.Bids, bestBid)
-				e.Book.BidPrices = e.Book.BidPrices[1:]
+				delete(Book.Bids, bestBid)
+				Book.BidPrices = Book.BidPrices[1:]
 			}
 		}
 	}
