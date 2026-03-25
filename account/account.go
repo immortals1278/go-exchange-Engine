@@ -131,22 +131,18 @@ func ChangeBalance(userID, asset string, delta decimal.Decimal, entryType string
 	return tx.Commit() == nil
 }
 
-func Freeze(userID, asset string, amount float64) bool {
-	delta := decimal.NewFromFloat(amount)
-	return ChangeBalance(userID, asset, delta, "freeze", "", "")
+func Freeze(userID, asset string, amount decimal.Decimal) bool {
+	return ChangeBalance(userID, asset, amount, "freeze", "", "")
 }
 
-func Unfreeze(userID, asset string, amount float64) {
-	delta := decimal.NewFromFloat(amount)
-	ChangeBalance(userID, asset, delta, "unfreeze", "", "")
+func Unfreeze(userID, asset string, amount decimal.Decimal) {
+	ChangeBalance(userID, asset, amount, "unfreeze", "", "")
 }
 
-func DeductFrozen(userID, asset string, amount float64) {
-	delta := decimal.NewFromFloat(amount)
-	ChangeBalance(userID, asset, delta, "trade_deduct", "", "")
+func DeductFrozen(userID, asset string, amount decimal.Decimal) {
+	ChangeBalance(userID, asset, amount, "trade_deduct", "", "")
 }
 
-func AddBalance(userID, asset string, amount float64) {
-	delta := decimal.NewFromFloat(amount)
-	ChangeBalance(userID, asset, delta, "trade_add", "", "")
+func AddBalance(userID, asset string, amount decimal.Decimal) {
+	ChangeBalance(userID, asset, amount, "trade_add", "", "")
 }
