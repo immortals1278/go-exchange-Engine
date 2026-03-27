@@ -16,9 +16,9 @@ func main() {
 
 	handler := api.NewHandler(engine)
 
-	http.HandleFunc("/order", handler.PlaceOrder)
-
-	http.HandleFunc("/cancel", handler.CancelOrder)
+	http.HandleFunc("/api/login", handler.LogIn)
+	http.HandleFunc("/api/order", handler.PlaceOrder)
+	http.HandleFunc("/api/cancel", handler.CancelOrder)
 
 	http.ListenAndServe(":8080", nil)
 }
