@@ -80,14 +80,14 @@ func (e *MatchingEngine) match(symbol string) {
 	
 	for {
 		if len(book.BidPrices) == 0 || len(book.AskPrices) == 0 {
-			return
+			return errors.New("order book is empty")
 		}
 
 		bestBid := book.BidPrices[0]
 		bestAsk := book.AskPrices[0]
 
 		if bestBid < bestAsk {
-			return
+			return errors.New("best bid %f less than best ask %f, no cross", bestBid, bestAsk)
 		}
 
 		bidLevel := book.Bids[bestBid]
