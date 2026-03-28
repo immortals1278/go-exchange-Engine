@@ -30,7 +30,7 @@ func ChangeBalance(userID, asset string, delta decimal.Decimal, entryType string
 	// 开始事务
 	tx, err := storage.DB.Begin()
 	if err != nil {
-		log.Println(err)
+		log.Println("事务开始失败:", err)
 		return false
 	}
 	
@@ -43,12 +43,15 @@ func ChangeBalance(userID, asset string, delta decimal.Decimal, entryType string
 	
 	if err != nil {
 		tx.Rollback()
-		log.Println(err)
+		log.Printf("查询余额失败: userID=%s, asset=%s, error=%v", userID, asset, err)
 		return false
 	}
 	
 	availDec, _ := decimal.NewFromString(available)
 	frozenDec, _ := decimal.NewFromString(frozen)
+	
+	log.Printf("余额检查: userID=%s, asset=%s, available=%s, frozen=%s, delta=%s, entryType=%s", 
+		userID, asset, available, frozen, delta.String(), entryType)
 	
 	// 根据操作类型更新余额
 	var newAvailable, newFrozen decimal.Decimal
@@ -57,6 +60,7 @@ func ChangeBalance(userID, asset string, delta decimal.Decimal, entryType string
 	switch entryType {
 	case "freeze":
 		if availDec.LessThan(delta) {
+			log.Printf("余额不足: available=%s, delta=%s", availDec.String(), delta.String())
 			tx.Rollback()
 			return false
 		}

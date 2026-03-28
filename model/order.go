@@ -16,13 +16,13 @@ const (
 )
 
 type Order struct {
-	ID       string
-	UserID   string
-	Symbol   string
-	Side     Side
-	Price    float64
-	Quantity float64
-	Status Status
+	ID       string  `json:"id"`
+	UserID   string  `json:"user_id"`
+	Symbol   string  `json:"symbol"`
+	Side     Side    `json:"side"`
+	Price    float64 `json:"price"`
+	Quantity float64 `json:"quantity"`
+	Status   Status  `json:"status"`
 }
 
 //定义订单

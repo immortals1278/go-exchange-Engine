@@ -21,11 +21,11 @@ func InitMySQL() {
 	DB = db
 }
 
-func SaveOrder(id, userID, side string, price, qty float64) {
+func SaveOrder(id, userID, side, symbol string, price, qty float64) {
 
 	_, err := DB.Exec(
-		"INSERT INTO orders(id,user_id,side,price,quantity,status) VALUES(?,?,?,?,?,?)",
-		id, userID, side, price, qty, "open",
+		"INSERT INTO orders(id,user_id,side,symbol,price,quantity,status) VALUES(?,?,?,?,?,?,?)",
+		id, userID, side, symbol, price, qty, "open",
 	)
 
 	if err != nil {
