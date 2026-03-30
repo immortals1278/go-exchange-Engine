@@ -26,6 +26,28 @@ func GetBalance(userID, asset string) (decimal.Decimal, decimal.Decimal) {
 	return availDec, frozenDec
 }
 
+func GetAllBalances(userID string) map[string]string {
+	rows, err := storage.DB.Query(
+		"SELECT asset, available FROM balances WHERE user_id=?",
+		userID,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	balances := make(map[string]string)
+	for rows.Next() {
+		var asset, available string
+		if err := rows.Scan(&asset, &available); err != nil {
+			continue
+		}
+		balances[asset] = available
+	}
+
+	return balances
+}
+
 func ChangeBalance(userID, asset string, delta decimal.Decimal, entryType string, refOrderID, refTradeID string) bool {
 	// 开始事务
 	tx, err := storage.DB.Begin()

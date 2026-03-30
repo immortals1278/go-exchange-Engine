@@ -45,9 +45,13 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 获取所有资产余额
+	balances := account.GetAllBalances(order.UserID)
+
 	json.NewEncoder(w).Encode(Response{
 		Code: 0,
 		Msg:  "ok",
+		Data: balances,
 	})
 }
 
@@ -55,10 +59,11 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	id := r.URL.Query().Get("id")
-	if id == "" {
+	userID := r.URL.Query().Get("user_id")
+	if id == "" || userID == "" {
 		json.NewEncoder(w).Encode(Response{
 			Code: 1,
-			Msg:  "id required",
+			Msg:  "id and user_id required",
 		})
 		return
 	}
@@ -73,9 +78,13 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 获取所有资产余额
+	balances := account.GetAllBalances(userID)
+
 	json.NewEncoder(w).Encode(Response{
 		Code: 0,
 		Msg:  "canceled",
+		Data: balances,
 	})
 }
 
