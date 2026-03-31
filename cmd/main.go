@@ -10,7 +10,7 @@ import (
 func main() {
 	
 	storage.InitMySQL()
-	storage.InitRedis()
+	// Redis 已移除
 
 	engine := engine.NewMatchingEngine()
 
@@ -19,6 +19,7 @@ func main() {
 	http.HandleFunc("/api/login", handler.LogIn)
 	http.HandleFunc("/api/order", handler.PlaceOrder)
 	http.HandleFunc("/api/cancel", handler.CancelOrder)
+	http.HandleFunc("/api/balance", handler.GetBalance)
 
 	http.ListenAndServe(":8080", nil)
 }
