@@ -75,6 +75,7 @@ func (e *MatchingEngine) PlaceOrder(order *model.Order) error {
 
 func (e *MatchingEngine) match(symbol string) {
 	book := e.getBook(symbol)
+	baseAsset, quoteAsset := e.getAssets(symbol)
 	
 	for {
 		if len(book.BidPrices) == 0 || len(book.AskPrices) == 0 {
@@ -91,6 +92,19 @@ func (e *MatchingEngine) match(symbol string) {
 		bidLevel := book.Bids[bestBid]
 		askLevel := book.Asks[bestAsk]
 
+		if len(bidLevel.Orders) == 0 || len(askLevel.Orders) == 0 {
+			// 移除空的价格级别
+			if len(bidLevel.Orders) == 0 {
+				delete(book.Bids, bestBid)
+				book.BidPrices = book.BidPrices[1:]
+			}
+			if len(askLevel.Orders) == 0 {
+				delete(book.Asks, bestAsk)
+				book.AskPrices = book.AskPrices[1:]
+			}
+			continue
+		}
+
 		buyOrder := bidLevel.Orders[0]
 		sellOrder := askLevel.Orders[0]
 
@@ -106,18 +120,23 @@ func (e *MatchingEngine) match(symbol string) {
 		tradeAmount := tradePriceDec.Mul(tradeQtyDec)
 		fee := tradeAmount.Mul(decimal.NewFromFloat(FeeRate))
 
-		// 买方：扣钱（USDT + fee），收币（BTC）
-		account.DeductFrozen(buyOrder.UserID, "USDT", tradeAmount)
-		account.ChangeBalance(buyOrder.UserID, "USDT", fee, "fee", buyOrder.ID, "")
-		account.AddBalance(buyOrder.UserID, "BTC", tradeQtyDec)
+		// 买方：扣钱（报价资产 + fee），收币（基础资产）
+		account.DeductFrozen(buyOrder.UserID, quoteAsset, tradeAmount)
+		// 退还多冻结的资金
+		refund := decimal.NewFromFloat(buyOrder.Price).Sub(tradePriceDec).Mul(tradeQtyDec)
+		if refund.GreaterThan(decimal.Zero) {
+			account.Unfreeze(buyOrder.UserID, quoteAsset, refund)
+		}
+		account.ChangeBalance(buyOrder.UserID, quoteAsset, fee, "fee", buyOrder.ID, "")
+		account.AddBalance(buyOrder.UserID, baseAsset, tradeQtyDec)
 
-		// 卖方：扣币（BTC），收钱（USDT - fee），扣手续费（USDT）
-		account.DeductFrozen(sellOrder.UserID, "BTC", tradeQtyDec)
-		account.AddBalance(sellOrder.UserID, "USDT", tradeAmount.Sub(fee))
-		account.ChangeBalance(sellOrder.UserID, "USDT", fee, "fee", sellOrder.ID, "")
+		// 卖方：扣币（基础资产），收钱（报价资产 - fee），扣手续费（报价资产）
+		account.DeductFrozen(sellOrder.UserID, baseAsset, tradeQtyDec)
+		account.AddBalance(sellOrder.UserID, quoteAsset, tradeAmount.Sub(fee))
+		account.ChangeBalance(sellOrder.UserID, quoteAsset, fee, "fee", sellOrder.ID, "")
 
-		// 系统账户：收手续费（USDT）
-		account.ChangeBalance(SystemUserID, "USDT", fee, "fee_credit", "", "")
+		// 系统账户：收手续费（报价资产）
+		account.ChangeBalance(SystemUserID, quoteAsset, fee, "fee_credit", "", "")
 
 		storage.SaveTrade(buyOrder.ID, sellOrder.ID, tradePrice, tradeQty)
 
@@ -132,6 +151,8 @@ func (e *MatchingEngine) match(symbol string) {
 			}
 			buyOrder.Status = model.Filled
 			storage.UpdateOrderStatus(buyOrder.ID, "filled")
+			// 从订单索引中移除
+			delete(e.OrderIndex, buyOrder.ID)
 		}
 
 		if sellOrder.Quantity == 0 {
@@ -142,6 +163,8 @@ func (e *MatchingEngine) match(symbol string) {
 			}
 			sellOrder.Status = model.Filled
 			storage.UpdateOrderStatus(sellOrder.ID, "filled")
+			// 从订单索引中移除
+			delete(e.OrderIndex, sellOrder.ID)
 		}
 	}
 }

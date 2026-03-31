@@ -61,7 +61,10 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(Response{
 		Code: 0,
 		Msg:  "ok",
-		Data: balances,
+		Data: map[string]interface{}{
+			"order_id": order.ID,
+			"balances": balances,
+		},
 	})
 }
 

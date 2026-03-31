@@ -114,17 +114,7 @@ function TradePage({ userID, setMessage }) {
   const [side, setSide] = useState('buy')
   const [price, setPrice] = useState('50000')
   const [quantity, setQuantity] = useState('0.01')
-  const [balances, setBalances] = useState({})
-
-  const fetchBalances = async () => {
-    try {
-      // 这里我们可以通过下单或取消订单的响应获取余额
-      // 暂时模拟数据
-      setBalances({ USDT: '10000', BTC: '0' })
-    } catch (error) {
-      setMessage('Failed to fetch balances: ' + error.message)
-    }
-  }
+  const [orders, setOrders] = useState([])
 
   const handlePlaceOrder = async (e) => {
     e.preventDefault()
@@ -148,7 +138,15 @@ function TradePage({ userID, setMessage }) {
       
       if (data.code === 0) {
         setMessage('✅ Order placed successfully')
-        setBalances(data.data)
+        // 添加新订单到列表
+        setOrders(prev => [...prev, {
+          id: data.data.order_id,
+          symbol: symbol,
+          side: side,
+          price: parseFloat(price),
+          quantity: parseFloat(quantity),
+          status: 'open'
+        }])
       } else {
         setMessage('❌ Order failed: ' + data.msg)
       }
@@ -164,14 +162,38 @@ function TradePage({ userID, setMessage }) {
     }
   }
 
+  const handleCancelOrder = async (orderId) => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/cancel?id=${orderId}&user_id=${userID}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      const data = await response.json()
+      
+      if (data.code === 0) {
+        setMessage('✅ Order canceled successfully')
+        // 更新订单状态
+        setOrders(prev => prev.map(order => 
+          order.id === orderId ? { ...order, status: 'canceled' } : order
+        ))
+      } else {
+        setMessage('❌ Cancel failed: ' + data.msg)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setMessage('❌ Cancel failed: ' + error.message)
+    } finally {
+      // 3秒后清除消息
+      setTimeout(() => setMessage(''), 3000)
+    }
+  }
+
   return (
     <div className="trade-page">
       <h2>Trade</h2>
-      <div className="balance-info">
-        <h3>Balances</h3>
-        <div className="balance-item">USDT: {balances.USDT || '0'}</div>
-        <div className="balance-item">BTC: {balances.BTC || '0'}</div>
-      </div>
       <form onSubmit={handlePlaceOrder} className="order-form">
         <div className="form-group">
           <label>Symbol</label>
@@ -181,6 +203,7 @@ function TradePage({ userID, setMessage }) {
             className="form-input"
           >
             <option value="BTC/USDT">BTC/USDT</option>
+            <option value="ETH/USDT">ETH/USDT</option>
           </select>
         </div>
         <div className="form-group">
@@ -226,6 +249,35 @@ function TradePage({ userID, setMessage }) {
           Place Order
         </button>
       </form>
+      
+      <div className="orders-section">
+        <h3>My Orders</h3>
+        {orders.length === 0 ? (
+          <p className="no-orders">No orders placed yet</p>
+        ) : (
+          <div className="orders-list">
+            {orders.map(order => (
+              <div key={order.id} className="order-item">
+                <div className="order-info">
+                  <span className={`order-side ${order.side}`}>{order.side.toUpperCase()}</span>
+                  <span className="order-symbol">{order.symbol}</span>
+                  <span className="order-price">${order.price}</span>
+                  <span className="order-quantity">{order.quantity} {order.symbol.split('/')[0]}</span>
+                  <span className={`order-status ${order.status}`}>{order.status}</span>
+                </div>
+                {order.status === 'open' && (
+                  <button 
+                    className="cancel-button"
+                    onClick={() => handleCancelOrder(order.id)}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -267,6 +319,11 @@ function BalancePage({ userID, setMessage }) {
         <div className="balance-card">
           <h3>BTC</h3>
           <div className="balance-amount">{balances.BTC || '0'}</div>
+          <div className="balance-label">Available</div>
+        </div>
+        <div className="balance-card">
+          <h3>ETH</h3>
+          <div className="balance-amount">{balances.ETH || '0'}</div>
           <div className="balance-label">Available</div>
         </div>
       </div>
