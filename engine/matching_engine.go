@@ -65,11 +65,10 @@ func (e *MatchingEngine) PlaceOrder(order *model.Order) error {
 	book := e.getBook(order.Symbol)
 	book.AddOrder(order)
 
-	e.match(order.Symbol)
-
 	storage.SaveOrder(order.ID, order.UserID, string(order.Side), order.Symbol, order.Price, order.Quantity)
-
 	e.OrderIndex[order.ID] = order.Symbol
+
+	e.match(order.Symbol)
 
 	return nil
 }
