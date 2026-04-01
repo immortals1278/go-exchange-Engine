@@ -1,12 +1,12 @@
 package engine
 
 import (
+	"errors"
+	"go-exchange/account"
 	"go-exchange/model"
 	"go-exchange/orderbook"
 	"go-exchange/storage"
-	"go-exchange/account"
 	"strings"
-	"errors"
 
 	"github.com/shopspring/decimal"
 )
@@ -15,13 +15,13 @@ const SystemUserID = "system"
 const FeeRate = 0.001 // 0.1% 手续费率
 
 type MatchingEngine struct {
-	Books map[string]*orderbook.OrderBook
-	OrderIndex map[string]string// ID -> Symbol
+	Books      map[string]*orderbook.OrderBook
+	OrderIndex map[string]string // ID -> Symbol
 }
 
 func NewMatchingEngine() *MatchingEngine {
 	return &MatchingEngine{
-		Books: make(map[string]*orderbook.OrderBook),
+		Books:      make(map[string]*orderbook.OrderBook),
 		OrderIndex: make(map[string]string),
 	}
 }
@@ -43,23 +43,24 @@ func (e *MatchingEngine) getAssets(symbol string) (string, string) {
 
 func (e *MatchingEngine) PlaceOrder(order *model.Order) error {
 	baseAsset, quoteAsset := e.getAssets(order.Symbol)
-	
+
+	// 生成订单ID
+	order.ID = GenerateOrderID()
+
 	//冻结逻辑
 	var ok bool
 	if order.Side == model.Buy {
 		// 买基础资产，冻结报价资产
 		cost := decimal.NewFromFloat(order.Price * order.Quantity)
-		ok = account.Freeze(order.UserID, quoteAsset, cost)
+		ok = account.Freeze(order.UserID, quoteAsset, cost, order.ID)
 	} else {
 		// 卖基础资产，冻结基础资产
 		amount := decimal.NewFromFloat(order.Quantity)
-		ok = account.Freeze(order.UserID, baseAsset, amount)
+		ok = account.Freeze(order.UserID, baseAsset, amount, order.ID)
 	}
 	if !ok {
 		return errors.New("insufficient balance") // 余额不足
 	}
-
-	order.ID = GenerateOrderID()
 	order.Status = model.Open
 	book := e.getBook(order.Symbol)
 	book.AddOrder(order)
@@ -76,17 +77,17 @@ func (e *MatchingEngine) PlaceOrder(order *model.Order) error {
 func (e *MatchingEngine) match(symbol string) {
 	book := e.getBook(symbol)
 	baseAsset, quoteAsset := e.getAssets(symbol)
-	
+
 	for {
 		if len(book.BidPrices) == 0 || len(book.AskPrices) == 0 {
-			return 
+			return
 		}
 
 		bestBid := book.BidPrices[0]
 		bestAsk := book.AskPrices[0]
 
 		if bestBid < bestAsk {
-			return 
+			return
 		}
 
 		bidLevel := book.Bids[bestBid]
@@ -121,19 +122,18 @@ func (e *MatchingEngine) match(symbol string) {
 		fee := tradeAmount.Mul(decimal.NewFromFloat(FeeRate))
 
 		// 买方：扣钱（报价资产 + fee），收币（基础资产）
-		account.DeductFrozen(buyOrder.UserID, quoteAsset, tradeAmount)
+		account.DeductFrozen(buyOrder.UserID, quoteAsset, tradeAmount, buyOrder.ID)
 		// 退还多冻结的资金
 		refund := decimal.NewFromFloat(buyOrder.Price).Sub(tradePriceDec).Mul(tradeQtyDec)
 		if refund.GreaterThan(decimal.Zero) {
-			account.Unfreeze(buyOrder.UserID, quoteAsset, refund)
+			account.UnfreezeAmount(buyOrder.UserID, quoteAsset, refund, buyOrder.ID)
 		}
-		account.ChangeBalance(buyOrder.UserID, quoteAsset, fee, "fee", buyOrder.ID, "")
+		account.ChangeBalance(buyOrder.UserID, quoteAsset, fee, "fee_available", buyOrder.ID, "")
 		account.AddBalance(buyOrder.UserID, baseAsset, tradeQtyDec)
 
 		// 卖方：扣币（基础资产），收钱（报价资产 - fee），扣手续费（报价资产）
-		account.DeductFrozen(sellOrder.UserID, baseAsset, tradeQtyDec)
+		account.DeductFrozen(sellOrder.UserID, baseAsset, tradeQtyDec, sellOrder.ID)
 		account.AddBalance(sellOrder.UserID, quoteAsset, tradeAmount.Sub(fee))
-		account.ChangeBalance(sellOrder.UserID, quoteAsset, fee, "fee", sellOrder.ID, "")
 
 		// 系统账户：收手续费（报价资产）
 		account.ChangeBalance(SystemUserID, quoteAsset, fee, "fee_credit", "", "")
@@ -151,6 +151,8 @@ func (e *MatchingEngine) match(symbol string) {
 			}
 			buyOrder.Status = model.Filled
 			storage.UpdateOrderStatus(buyOrder.ID, "filled")
+			// 解冻订单的所有剩余冻结资金
+			account.Unfreeze(buyOrder.UserID, quoteAsset, buyOrder.ID)
 			// 从订单索引中移除
 			delete(e.OrderIndex, buyOrder.ID)
 		}
@@ -163,6 +165,8 @@ func (e *MatchingEngine) match(symbol string) {
 			}
 			sellOrder.Status = model.Filled
 			storage.UpdateOrderStatus(sellOrder.ID, "filled")
+			// 解冻订单的所有剩余冻结资金
+			account.Unfreeze(sellOrder.UserID, baseAsset, sellOrder.ID)
 			// 从订单索引中移除
 			delete(e.OrderIndex, sellOrder.ID)
 		}
@@ -175,34 +179,32 @@ func (e *MatchingEngine) CancelOrder(orderID string) bool {
 	if !exists {
 		return false
 	}
-	
+
 	book := e.getBook(symbol)
 	order := book.GetOrder(orderID)
-	
+
 	if order == nil {
 		return false
 	}
-	
+
 	// 解冻资产
 	baseAsset, quoteAsset := e.getAssets(symbol)
 	if order.Side == model.Buy {
 		// 买单，解冻报价资产
-		cost := decimal.NewFromFloat(order.Price * order.Quantity)
-		account.Unfreeze(order.UserID, quoteAsset, cost)
+		account.Unfreeze(order.UserID, quoteAsset, order.ID)
 	} else {
 		// 卖单，解冻基础资产
-		amount := decimal.NewFromFloat(order.Quantity)
-		account.Unfreeze(order.UserID, baseAsset, amount)
+		account.Unfreeze(order.UserID, baseAsset, order.ID)
 	}
-	
+
 	// 从订单簿中移除
 	book.RemoveOrder(orderID)
-	
+
 	// 更新数据库状态
 	storage.UpdateOrderStatus(orderID, "canceled")
-	
+
 	// 从索引中移除
 	delete(e.OrderIndex, orderID)
-	
+
 	return true
 }
